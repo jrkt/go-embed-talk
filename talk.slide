@@ -1,0 +1,436 @@
+Go Embed - Successes and Stumbles at Weave
+
+Jonathan Stevens
+DevX Engineering Manager, Weave
+
+* So, what is DevX?
+
+*Mission* *Statement*
+
+1. Help our teams achieve Agility with Resiliency! That means secure, stable, and scalable services while still enabling the teams to move as fast as possible.
+2. Explore new technologies that could benefit the engineering team and company as a whole.
+
+We serve the Engineering Dept by building internal tooling and infrastructure to help them move fast and have visibility into the services they deploy.
+
+We have built:
+- a deployment pipeline to safely manage the deployments of our services
+- a secret management solution with Vault to inject decrypted secrets at runtime
+- automatic long-term, multi-window, multi-burn, SLO metrics with accompanying dashboards
+- an API-first solution for designing an API to be accessed through our API Gateway with custom protoc generators and internally served Open API documentation
+- a CLI tool (which we'll talk about today) for engineers to interact with our complex system in a user-friendly way
+- a canary deployment system
+- an automated API testing infrastructure that runs on deploy for all dependant services using our tracing data
+- several custom Kubernetes operators
+- this list goes on...
+
+*Oh,* *and* *we're* *hiring!*
+
+*  What is embed?
+- Package embed provides access to files embedded in the running Go program.
+- Go source files that import "embed" can use the `//go:embed` directive to initialize a variable of type string, []byte, or FS with the contents of files read from the package directory or subdirectories at compile time.
+
+*Directives*
+A `//go:embed` directive above a variable declaration specifies which files to embed, using one or more [[https://pkg.go.dev/path#Match][path.Match]] patterns.
+
+The directive must immediately precede a line containing the declaration of a single variable. Only blank lines and ‘//’ line comments are permitted between the directive and the declaration.
+
+The type of the variable must be a string type, or a slice of a byte type, or FS (or an alias of FS).
+
+For example:
+
+    package server
+
+    import "embed"
+
+    // content holds our static web server content.
+    //go:embed image/* template/*
+    //go:embed html/index.html
+    var content embed.FS
+
+The Go build system will recognize the directives and arrange for the declared variable (in the example above, content) to be populated with the matching files from the file system.
+
+.caption Taken from: [[https://pkg.go.dev/embed][https://pkg.go.dev/embed]]
+
+* Usage (basic)
+Take a simple file structure:
+.code simple-file-structure.txt
+*hello.txt*:
+
+    Heyyoooo
+
+Embedding `hello.txt` into a slice of bytes:
+.play embed_byte_slice.go
+.caption _Note:_ _you_ _must_ _import_ _embed_ _for_ _it's_ _side-effects_ _even_ _if_ _it's_ _not_ _used_ _directly_
+
+* Usage (basic)
+Embedding `templates` into a file system
+
+Using the same file structure:
+.code simple-file-structure.txt
+.play embed_fs.go
+
+* Usage (HTTP)
+Simple HTML page
+.code http/index.html
+
+* Usage (HTTP)
+.code simple-file-structure-http.txt
+.play http/server.go
+
+* Usage (HTTP w/ images)
+.code http-with-images-fs.txt
+HTML page with assets
+.code http-with-images/index-with-images.html
+
+* Usage (HTTP w/ images - using separate types)
+.play http-with-images/server.go
+
+* Usage (HTTP w/ images - using only filesystem)
+.play http-with-images-fs/server.go
+
+* Let's talk about bart
+CLI for Weave engineers to do all the things
+.image bart.png 600 600
+
+: show 'bart -h', 'bart owned-by -h', 'bart run -h' and 'bart party'
+: BUT, we're here to talk about 'bart ui -h'
+
+* bart ui
+- Allows engineers to have a fully functional website to interact with and view things about their service.
+- Launches webserver that serves front-end React code & backend Go code
+
+    jstevens@tiny:~/go/src/weavelab.xyz/the-deployer$ bart ui
+    Opening in existing browser session.
+
+*But,* *why* *are* *we* *talking* *about* *'bart* *ui'?*
+
+- Because, it uses the embed package!
+- The build pipeline is responsible for building the React code and embedding that content into the Go binary
+
+* bart ui
+.image bart-ui-the-deployer.png 750 750
+
+: show 'bart ui' for the-deployer
+
+* bart ui (pre-April 19th)
+- we used [[https://github.com/gobuffalo/packr/tree/master/v2][packr]] to embed our static `ui` files into our `bart` releases
+- this introduced complexity into our build pipeline that was outside the supported Go toolkit
+- it didn't support the initialization of static assets into concrete Go types
+- everything was put in a "Box" and then you would read the files from there in your code
+- it generated additional `packrd` files that translated the static assets into Go files and then injected those raw bytes into the "Box" from memory
+- this required a separate build container with `packr` built in
+- because of all the added complexity, we often had sporadic build failures
+
+* bart ui (pre-April 19th)
+.code bart-ui-fs-pre-april.txt
+
+Initialized the "packr Box"
+
+    func init() {
+    	buildFilesBox = packr.New("Build Files", "../ui/build/")
+    }
+
+Served that content for the front-end site
+
+    uiRouter := mux.NewRouter()
+    uiRouter.PathPrefix("/").Handler(http.FileServer(buildFilesBox))
+
+* bart ui (today)
+.html bart-ui-today.html
+
+* bart ui (today)
+.code bart-ui-fs-today.txt
+
+Initialize filesystem from built React code
+
+    // embed.go
+    package ui
+
+    import "embed"
+
+    //go:embed build/*
+    var embedFS embed.FS
+
+    // StaticFilesHandler is the embedded static files for the ui
+    var StaticFilesHandler = http.FileServer(http.FS(embedFS))
+
+Serve content directly from `embed.FS`
+
+    uiRouter := mux.NewRouter()
+    uiRouter.PathPrefix("/").Handler(ui.StaticFilesHandler)
+
+* bart ui (today)
+And we had no gotchas and no challenges!
+
+Everything was all sunshine and rainbows!
+
+.image sunshine-and-rainbows.png 600 1100
+
+* bart ui (today)
+.image not.png 750 750
+
+* go:embed stumbles for bart ui
+*Failures*
+- shipped bart with an empty filesystem
+- forgot to clean out generated packrd files which prevented the webpage from loading because we were bundling the same content in different places
+- several others that I have mentally blocked out of my memory
+
+* Let's talk about the WAML™
+The WAML™ is the weave yaml and is at the root of every deployable service.
+
+It defines how your service should be deployed and how it should scale and alert, among other things.
+
+`bart` uses the WAML™ to gather information about a service so it can display the correct information and function in a way that is isolated to a specific service.
+
+This means that we need to programmatically fondle the WAML™ with templates.
+
+* The WAML™ (pre-April 19th)
+We had a plethora of "templates" that were just stuck in variables.
+
+We did this because it is a shared package and we didn't want anything that depended on it's templates to also have a dependency on `packr`.
+
+    var WAML = `{{ $wapp := . -}}
+    schema: {{ .Schema | quote }}
+    name: {{ .Name }}
+    slug: {{ .Slug }}
+    owner: {{ .Owner }}
+    {{- include "registry" $wapp }}
+    {{- include "slack" $wapp }}
+    {{- include "namespace" $wapp }}
+    {{- include "template" $wapp }}
+    {{- include "defaults" $wapp }}
+    {{- include "deploy" $wapp }}
+    `
+
+    var Deploy = `{{- define "deploy" }}
+    {{- if .Deploy }}
+    deploy:
+      {{- range $deployID, $deployMeta := .Deploy }}
+        {{- if $deployMeta.IsEmpty }}
+      {{ $deployID }}: {}
+        {{- else if $deployMeta }}
+      {{ $deployID }}:{{ include "deployMeta" $deployMeta | nindent 4 }}
+      {{- end }}
+        {{- end }}
+    {{- else }}
+    {{- end }}
+    {{- end }}`
+
+* The WAML™ (pre-April 19th)
+Using templates within Go variables worked fine, but, editing these templates was a nightmare because you had no help from your IDE and keeping indentations straight was ridiculous.
+
+Nonetheless, it worked for the time being.
+
+    var Monitoring = `{{- define "deployMeta.monitoring" }}
+    {{- if .Monitoring }}
+    monitoring:
+      {{- if stringSliceIsNil .Monitoring.AlertMethods }}
+      {{- else if eq (len .Monitoring.AlertMethods) 0 }}
+      alertMethods: []
+      {{ else }}
+      alertMethods:
+      {{- range .Monitoring.AlertMethods }}
+      - {{ . }}
+      {{- end }}
+      {{- end }}
+      {{- with .Monitoring.Rules }}
+      rules:
+      {{- range . }}
+      {{- if .Alert | and (not .Record) }}
+      - alert: {{ .Alert }}
+      {{- if .Record | and (not .Alert) }}
+      - record: {{ .Record }}
+      {{- end }}
+        expr: | {{- .Expr | nindent 6 }}
+      {{- if .For }}
+        for: {{ .For }}
+      {{- end }}
+      {{- if stringSliceIsNil .AlertMethods }}
+      {{- else if eq (len .AlertMethods) 0 }}
+        alertMethods: []
+      {{- else }}
+        alertMethods:
+        {{- range .AlertMethods }}
+        - {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- if .Annotations }}
+        annotations:{{ .Annotations | toYaml | nindent 6 }}
+      {{- end }}
+      {{- if .Labels }}
+        labels:{{ .Labels | toYaml | nindent 6 }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
+      {{- with .Monitoring.DB }}
+      db:{{ . | toYaml | nindent 4 }}
+      {{- end }}
+      {{- with .Monitoring.NSQ }}
+      nsq:
+      {{- range . }}
+        {{- if .Topic | and .Channel }}
+      - topic: {{ .Topic }}
+        channel: {{ .Channel }}
+        {{- else if .Topic }}
+      - topic: {{ .Topic }}
+        {{- else }}
+      - channel: {{ .Channel }}
+        {{- end }}
+        {{- with .Alerts }}
+        alerts:
+        {{- range . }}
+        {{- if .MaxTopicDepth }}
+        - maxTopicDepth: {{ .MaxTopicDepth }}
+          {{- with .MaxChannelDepth }}
+          maxChannelDepth: {{ . }}
+          {{- end }}
+          {{- with .MinConsumers }}
+          minConsumers: {{ . }}
+          {{- end }}
+        {{- else if .MaxChannelDepth }}
+        - maxChannelDepth: {{ .MaxChannelDepth }}
+          {{- with .MinConsumers }}
+          minConsumers: {{ . }}
+          {{- end }}
+        {{- else if .MinConsumers }}
+        - minConsumers: {{ .MinConsumers }}
+        {{- end }}
+          {{- if .Severity }}
+          severity: {{ .Severity }}
+          {{- end }}
+          {{- if .AlertAfter }}
+          alertAfter: {{ .AlertAfter }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- end }}`
+
+* The WAML™ (pre-April 19th)
+.image waml-template-go-files.png
+
+* The WAML™ (pre-April 19th)
+We had to define all our "included" WAML™ templates:
+
+    func Includes() map[string]string {
+    	return map[string]string{
+    		"slack":            includes.Slack,
+    		"namespace":        includes.Namespace,
+    		"registry":         includes.Registry,
+    		"template":         includes.Template,
+    		"defaults":         includes.Defaults,
+    		"deploy":           includes.Deploy,
+    		"deployMeta":       includes.DeployMeta,
+    		"containerPorts":   includes.ContainerPorts,
+    		"env":              includes.Env,
+    		"services":         includes.Services,
+    		"resources":        includes.Resources,
+    		"rollout":          includes.Rollout,
+    		"ingresses":        includes.Ingresses,
+    		"configMounts":     includes.ConfigMounts,
+    		"secretMounts":     includes.SecretMounts,
+    		"livenessProbe":    includes.LivenessProbe,
+    		"readinessProbe":   includes.ReadinessProbe,
+    		"featureFlags":     includes.FeatureFlags,
+    		"options":          includes.Options,
+    		"scratchVolumes":   includes.ScratchVolumes,
+    		"autoscaling":      includes.Autoscaling,
+    		"disruptionBudget": includes.DisruptionBudget,
+    		"monitoring":       includes.Monitoring,
+    		"databases":        includes.Databases,
+    		"sidecars":         includes.Sidecars,
+    		"slo":              includes.SLO,
+    	}
+    }
+
+* The WAML™ (today)
+Our WAML™ templates are ACTUAL template files 😲
+
+*waml.yaml.tmpl:*
+
+    {{ $wapp := . -}}
+    schema: {{ .Schema | quote }}
+    name: {{ .Name }}
+    slug: {{ .Slug }}
+    owner: {{ .Owner }}
+    {{- include "slack" $wapp }}
+    {{- include "namespace" $wapp }}
+    {{- include "template" $wapp }}
+
+    {{- include "defaults" $wapp }}
+    {{- include "deploy" $wapp }}
+
+*deploy.yaml.tmpl:*
+
+    {{- define "deploy" }}
+    {{- if .Deploy }}
+    deploy:
+      {{- range $deployID, $deployMeta := .Deploy }}
+        {{- if $deployMeta.IsEmpty }}
+      {{ $deployID }}: {}
+        {{- else if $deployMeta }}
+      {{ $deployID }}:{{ include "deployMeta" $deployMeta | nindent 4 }}
+      {{- end }}
+        {{- end }}
+    {{- else }}
+    {{- end }}
+    {{- end }}
+
+
+* The WAML™ (today)
+.image waml-template-files.png
+
+* The WAML™ (today)
+We reference the WAML™ that is packaged with `go:embed` instead of the string representation of the template.
+
+    // NEW FILE -- weave.yaml.go
+    package templates
+
+    import _ "embed"
+
+    //go:embed waml.yaml.tmpl
+    var WAML string
+
+Any new template file we add gets automatically added as a template that we can use!
+
+    // IncludesFS is a single-layer deep list of files with module template components
+    //go:embed includes/*.yaml.tmpl
+    var IncludesFS embed.FS
+
+    func Includes() map[string]string {
+    	entries, err := IncludesFS.ReadDir("includes")
+    	if err != nil {
+    		panic(err)
+    	}
+
+    	ret := map[string]string{}
+    	for _, entry := range entries {
+    		name := "includes/" + entry.Name()
+
+    		content, err := IncludesFS.ReadFile(name)
+    		if err != nil {
+    			panic(err)
+    		}
+
+    		ret[name] = string(content)
+    	}
+
+    	return ret
+    }
+
+* Conclusion
+`go:embed` has been a very welcomed addition to the Go standard library.
+
+It has allowed us to remove so many non-standard dependencies and increased the reliability of our builds.
+
+*Gotchas!!*
+- "//go:embed" != "// go:embed"
+- When you include a directory, it won’t include files that start with . or _, but if you use a wildcard, like dir/*, it will include all files that match, even if they start with . or _.
+- It is *relative* to the file invoking the `go:embed` directive
+- You cannot go *up* a directory
+
+* It's a bart party!
+.play party.sh

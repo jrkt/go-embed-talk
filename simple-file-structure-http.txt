@@ -1,0 +1,3 @@
+.
+server.go
+index.html

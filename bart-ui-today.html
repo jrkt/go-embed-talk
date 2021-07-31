@@ -1,0 +1,10 @@
+<ul>
+    <li><s>use packr to embed our static `ui` files into our `bart` releases</s></li>
+    <li><s>this introduced complexity into our build pipeline that was outside the supported Go toolkit</s></li>
+    <li><s>it didn't support the initialization of static assets into concrete Go types</s></li>
+    <li><s>everything was put in a "Box" and then you would read the files from there in your code</s></li>
+    <li><s>it generated additional `packrd` files that translated the static assets into Go files and then injected those raw bytes into the "Box" from memory</s></li>
+    <li><s>this required a separate build container with `packr` built in</s></li>
+    <li><s>because of all the added complexity, we often had sporadic build failures</s></li>
+    <li>we use go:embed &#128522;</li>
+</ul>
