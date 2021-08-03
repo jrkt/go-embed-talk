@@ -1,0 +1,4 @@
+fs, err := fs.Sub(embedFS, "build")
+if err != nil {
+	panic(err)
+}

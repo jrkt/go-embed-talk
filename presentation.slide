@@ -217,8 +217,21 @@ Everything was all sunshine and rainbows!
 ## bart ui (today)
 .image images/not.png 750 750
 
-## go:embed stumbles for bart ui
+## one main stumble for bart ui with go:embed
 - shipped bart with an empty filesystem
+
+: shipped bart with an empty filesystem
+: - we didn't realize that the filesystem contains the directory embedded and not just the contents within it
+: - that's why you need to serve the FS that corresponds to the subtree within the embed.FS
+
+.code code/bart-bad-web-fs-ui-package.txt
+
+.code code/bart-bad-web-fs-webserver-package.txt
+
+.image images/bart-ui-bad-fs.png
+
+.code code/bart-ui-sub-fs.txt
+
 - forgot to clean out generated packrd files which prevented the webpage from loading because we were bundling the same content in different places
 - several others that I have mentally blocked out of my memory
 

@@ -1,0 +1,3 @@
+// WebFS is the embedded static files for the ui
+//go:embed build/*
+var WebFS embed.FS
