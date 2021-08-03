@@ -1,0 +1,4 @@
+.
+simple-http-server.go
+└── templates
+    └── simple-http-index.html

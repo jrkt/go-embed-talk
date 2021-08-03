@@ -1,0 +1,10 @@
+// embed.go
+package ui
+
+import "embed"
+
+//go:embed build/*
+var embedFS embed.FS
+
+// StaticFilesHandler is the embedded static files for the ui
+var StaticFilesHandler = http.FileServer(http.FS(embedFS))

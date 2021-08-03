@@ -1,0 +1,2 @@
+jstevens@tiny:~/go/src/weavelab.xyz/the-deployer$ bart ui
+Opening in existing browser session.

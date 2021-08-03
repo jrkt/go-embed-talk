@@ -1,0 +1,4 @@
+.
+embed_byte_slice.go
+└── templates
+    └── hello.txt // HL

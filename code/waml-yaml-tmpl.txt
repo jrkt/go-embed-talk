@@ -1,0 +1,11 @@
+{{ $wapp := . -}}
+schema: {{ .Schema | quote }}
+name: {{ .Name }}
+slug: {{ .Slug }}
+owner: {{ .Owner }}
+{{- include "slack" $wapp }}
+{{- include "namespace" $wapp }}
+{{- include "template" $wapp }}
+
+{{- include "defaults" $wapp }}
+{{- include "deploy" $wapp }}

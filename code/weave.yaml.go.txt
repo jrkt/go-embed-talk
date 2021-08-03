@@ -1,0 +1,7 @@
+// NEW FILE -- weave.yaml.go
+package templates
+
+import _ "embed"
+
+//go:embed waml.yaml.tmpl
+var WAML string

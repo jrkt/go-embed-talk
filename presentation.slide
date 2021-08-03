@@ -1,0 +1,374 @@
+# Go Embed - Successes and Stumbles at Weave
+
+Jonathan Stevens
+DevX Engineering Manager, Weave
+https://github.com/jrkt
+
+## So, what is DevX?
+
+: okay, so this is a shameless plug, but, I need to just talk about how freakin awesome our team is
+
+: our mission statement
+
+1. Help our teams achieve Agility with Resiliency! That means secure, stable, and scalable services while still enabling the teams to move as fast as possible.
+2. Explore new technologies that could benefit the engineering team and company as a whole.
+
+We serve the Engineering Dept by building internal tooling and infrastructure to help them move fast and have visibility into the services they deploy.
+
+**We have built:**
+- a deployment pipeline to safely manage the deployments of our services
+- a secret management solution with Vault to inject decrypted secrets at runtime
+- automatic long-term, multi-window, multi-burn, SLO metrics with accompanying dashboards
+- an API-first solution for designing an API to be accessed through our API Gateway with custom protoc generators and internally served Open API documentation
+- a CLI tool (which we'll talk about today) for engineers to interact with our complex system in a user-friendly way
+- a canary deployment system w/ automated integration test infrastructure (ok, ok, this is actually in progress)
+- an automated API testing infrastructure that runs on deploy for all dependant services using our tracing data
+- several custom Kubernetes operators
+- this list goes on...
+
+**Oh, and we're hiring!**
+
+##  What is embed?
+
+: The official embed documentation is pretty clear and simple to understand, so I'm going to steal the first couple points from there
+
+: - traditionally the only thing compiled into a Go binary (from within the std lib) is Go source code
+- Package embed provides access to files embedded in the running Go program.
+- Go source files that import "embed" can use the `//go:embed` directive to initialize a variable of type string, []byte, or `embed.FS` with the contents of files read from the package directory or subdirectories at compile time.
+
+.image images/go-embed-1.16.jpg 500 900
+
+.caption Taken from: [[https://pkg.go.dev/embed][https://pkg.go.dev/embed]]
+
+## go:embed Directive
+: A compiler directive is a statement written in the source code of a program that lets the programmer instruct the compiler to perform a specific operation within the compilation phase.
+
+: 'images' and 'images/*' are not the same. We'll cover that later
+
+: multiline comments /* are ok as well
+
+A `//go:embed` directive above a variable declaration specifies which files to embed, using one or more [path.Match](https://pkg.go.dev/path#Match) patterns such as `images`, `images/*` or `images/*.png`
+
+The directive must immediately precede a line containing the declaration of a single variable. Only blank lines and ‘//’ line comments are permitted between the directive and the declaration.
+
+**Both of these examples are valid:**
+
+.code code/directive-example-1.txt
+
+.code code/directive-example-2.txt
+
+**Something like this is not:**
+
+.code code/directive-bad-example-1.txt
+
+And will result in the compiler error: `misplaced go:embed directive`
+
+## go:embed Directive
+The type of the variable must be a `string` type, a `byte slice`, or `FS` (or an alias of FS).
+
+For example:
+
+.code embed_initial_example.go
+
+*Note: when using a variable of a `FS` type, you can overload the variable with multiple uses of the `go:embed` directive*
+
+The Go build system will recognize the directives and arrange for the declared variable (in the example above, content) to be populated with the matching files from the file system.
+
+.caption Taken from: [[https://pkg.go.dev/embed][https://pkg.go.dev/embed]]
+
+## Usage (basic)
+Take a simple file structure:
+
+.code code/embed-byte-slice.txt
+
+**hello.txt**:
+
+    Heyyoooo
+
+Embedding `hello.txt` into a slice of bytes:
+
+.play embed_byte_slice.go
+.caption _Note:_ _you_ _must_ _import_ _embed_ _for_ _it's_ _side-effects_ _even_ _if_ _it's_ _not_ _used_ _directly_
+
+## Usage (basic)
+Embedding the entire `templates` directory into an `embed.FS`
+
+Using the same file structure:
+
+.code code/embed-fs.txt
+
+.play embed_fs.go
+
+## Usage (HTTP)
+Simple HTML page
+
+.code templates/simple-http-index.html
+
+## Usage (HTTP)
+
+: this is a simple example of an HTTP webserver
+: you embed the index.html file that is right alongside server.go and serve that content at the root path
+
+.code code/simple-http.txt
+
+.play simple-http-server.go
+
+## Usage (HTTP w/ images)
+
+: our HTML is the exact same except for the added img tag to show our gopher
+
+Same HTML page with one image added
+
+.code templates/http-with-image-index.html
+
+## Usage (HTTP w/ image)
+: now we have a templates directory with the index.html and an assets/images directory with a picture of a gopher
+: as you can see, we've separated out our webserver content a little bit
+
+.code code/http-with-image.txt
+
+.play http-server-with-image.go
+
+## Usage (HTTP w/ multiple images)
+.code templates/http-with-images-index.html
+
+## Usage (HTTP w/ multiple images)
+.play http-server-with-images.go
+
+## Usage (React app)
+.code code/react-fs.txt
+
+.play react-webserver.go
+
+## Let's talk about bart
+CLI for Weave engineers to do all the things
+
+.image images/bart.png 600 600
+
+: Bart allows engineers to interact with our build & deployment systems, secret management system, view information about their services from the kubernetes API, gain information about all of our clusters, and so much more.  
+: show 'bart -h', 'bart owned-by -h', and 'bart run -h'
+: as you can see, we take ascii art very serious when it comes to bart. I don't think our engineers have even seen all the ascii-goodness contained within bart
+: BUT, we're here to talk about...
+
+## bart ui
+- Allows engineers to have a fully functional website to interact with and view things about their service.
+- Launches webserver that serves front-end React code & backend Go code
+
+.code code/bart-ui-terminal.txt
+
+- The build pipeline is responsible for building the React code and embedding that content into the Go binary
+
+.code code/bart-ui-ascii.txt
+
+## bart ui
+
+: show 'bart ui' for the-deployer
+
+.image images/bart-ui-the-deployer.png 750 750
+
+## bart ui (pre-April 19th)
+- we used [packr](https://github.com/gobuffalo/packr/tree/master/v2) to embed our static `ui` files into our `bart` releases
+- this introduced complexity into our build pipeline that was outside the supported Go toolkit
+- it didn't support the initialization of static assets into concrete Go types
+- everything was put in a "Box" and then you would read the files from there in your code
+- it generated additional `packrd` files that translated the static assets into Go files and then injected those raw bytes into the "Box" from memory
+- this required a separate build container with the `packr` executable built in
+- because of all the added complexity, we had sporadic build failures
+
+## bart ui (pre-April 19th)
+.code code/bart-ui-pre-april.txt
+
+Initialized the "packr Box"
+
+: Because we are in webserver.go, we need to go up a directory and into the ui/build directory
+
+.code code/bart-ui-packr.txt
+
+Served that content for the front-end site
+
+.code code/bart-ui-packr-webserver.txt
+
+## bart ui (today)
+.html bart-ui-today.html
+
+## bart ui (today)
+: we added one file to our ui directory, embed.go as you'll see below, and modified our webserver just slightly
+
+.code code/bart-ui-today.txt
+
+Initialize filesystem from built React code
+
+: the new embed.go file, sits adjacent to our React code, with the package of ui
+: we then initialize the StaticFilesHandler with exactly what the webserver needs to serve that content, and just import that variable into our webserver
+
+.code code/bart-ui-today-embed-file.txt
+
+Serve content directly from the `ui.StaticFilesHandler`
+
+.code code/bart-ui-today-webserver.txt
+
+## bart ui (today)
+And we had no gotchas and no challenges!
+
+Everything was all sunshine and rainbows!
+
+.image images/sunshine-and-rainbows.png 600 1100
+
+## bart ui (today)
+.image images/not.png 750 750
+
+## go:embed stumbles for bart ui
+- shipped bart with an empty filesystem
+- forgot to clean out generated packrd files which prevented the webpage from loading because we were bundling the same content in different places
+- several others that I have mentally blocked out of my memory
+
+## Let's talk about the WAML™
+The WAML™ is the weave yaml and is at the root of every deployable service.
+
+It defines how a service should be deployed and how it should scale and alert, among other things.
+
+`bart` uses the WAML™ to gather information about a service so it can display the correct information and function in a way that is isolated to a specific service.
+
+This means that we need to programmatically fondle the WAML™ with templating.
+
+: yes, I said fondle the WAML
+
+: for some context, here's the top of the-deployer's WAML
+
+.code code/simple-waml.yaml
+
+## The WAML™ (pre-April 19th)
+We had a plethora of "templates" that were just stuck inside variables.
+
+We did this because it is a shared package and we didn't want anything that depended on it's templates to also have a dependency on `packr`.
+
+: here's some examples of these variables
+: the top-level WAML variable and the included Deploy sub-template
+
+.code code/template-variables.txt
+
+## The WAML™ (pre-April 19th)
+: this was working fine, but maintaining these variable templates was asinine 
+
+Using templates within Go variables worked fine, but, editing these templates was a nightmare because you had no help from your IDE with file type associations and keeping indentations straight was ridiculous.
+
+Nonetheless, it worked for the time being.
+
+.code code/template-variable-long.txt
+
+## The WAML™ (pre-April 19th)
+: and we didn't have just those two variable templates to keep straight, we had ALL of these...
+
+.image images/waml-template-go-files.png
+
+## The WAML™ (pre-April 19th)
+: Like I just showed, we had a top-level WAML variable that used other defined templates so we could break up one massive template into smaller, more workable chunks
+: So, pre-April 19th, we had to manually define all these sub-templates which meant we had to make sure we included them in this map when new ones were added
+: Now, let's look at the WAML templating today, shall we...
+
+We had to define all our "included" WAML™ templates:
+
+.code code/waml-includes-template-variables.txt
+
+## The WAML™ (today)
+Our WAML™ templates are ACTUAL template files 😲
+
+: we've got our top-level WAML template that used to be a variable, that is now in the waml.yaml.tmpl file. Say that three times fast. 
+**waml.yaml.tmpl:**
+
+.code code/waml-yaml-tmpl.txt
+
+: and we've got our deploy.yaml.tmpl file and they are known templating file extensions and all is happy
+**deploy.yaml.tmpl:**
+
+.code code/deploy-yaml-tmpl.txt
+
+## The WAML™ (today)
+: we still have all of our templates broken out into smaller chunks, but, now they are actual template files which has made modifications and maintainability much easier
+.image images/waml-template-files.png
+
+: but, how did that change our code, you might ask?
+
+## The WAML™ (today)
+We still have a `WAML`™ variable that the `text/template` package uses to write the output but the contents of that variable are packaged with `go:embed` instead of the string representation of the template.
+
+.code code/weave.yaml.go.txt
+
+## The WAML™ (today)
+: AND now we can just read all yaml template files in that directory
+Any new template file we add gets automatically added as a template that we can use!
+
+.code code/waml-includes-files.txt
+
+## Things of note
+
+: - "//go:embed" != "// go:embed" -- has anyone else come across this? This took Carson and I much longer to figure out than I would like to admit
+- "//go:embed" != "// go:embed"
+
+: - remember how I said the wildcard made a difference? well, here it is...
+- When you include a directory, it won’t include files that start with . or _, but if you use a wildcard, like dir/*, it will include all files that match, even if they start with . or _.
+
+: - it's not relative to the entrypoint of your compiled Go binary
+- It is **relative** to the **file** invoking the `go:embed` directive
+
+: - unlike packr, go embed can only look in adjacent files and child directories
+- You cannot go **up** a directory
+
+## Go present weirdness
+
+: now, this was a fun one...getting `go:embed` to play nice with this presentation was very interesting
+: running in this playground-type mode is very nuanced
+
+.play embed_string.go
+
+- Go present is running the `go` command for you when you execute this
+- It copies `embed_string.go` into a randomly named directory in your `tmp` directory referenced as your `prog.go`
+- It does not copy the files being referenced with `go:embed` to this `tmp` directory
+
+: you can see this in action if I add a little something to the go command in this repo
+
+## Go present weirdness
+: yes, the go command in this repo
+: if you look at the source code for this talk, you'll notice that I have a `go` executable in the root of the repo and a `run` script to run the presentation
+: because the embed file references aren't copied to the place where the code is actually executed AND because the present command runs the go command itself, I had to hijack the 'go' command to do a little pre-processing before it ACTUALLY runs the program with the REAL go command
+
+: so, the run script: 
+: - exports the path of the official go command
+: - prepends the current working directory to my $PATH so that the go command in this repo is found first
+: - exports REPO_DIR so it knows where to sync the files from
+: - then, runs the actual present command
+
+: once the presentation is running, it resolves the go command to the one located in this presentation directory
+
+: the munged go command:
+: - so, when I execute some block of code like the one on the previous slide, it actually runs my version of the go command as illustrated here
+: - as you can see, I'm rsyncing the files and directories from this repo to the tmp directory created by 'present' so that when it actually executes the code that is referencing files to embed, they will be there
+: - then, I just call the original go command
+
+**run**
+
+.code run
+
+**go**
+
+.code go
+
+## Go present weirdness
+Let's see it in action!
+
+: **manually go edit 'go' to include: echo "Working directory: $PWD"**
+
+: if I run this it works as expected
+: if I add a line to the munged go command to print the randomly created directory I am executing in, you will see it changes every time
+
+: however, if I simply run the 'present' command without all that setup, I get this error
+
+.play embed_string.go
+
+## Conclusion
+`go:embed` has been a very welcomed addition to the Go standard library.
+
+It has allowed us to remove so many non-standard dependencies and increased the reliability of our builds.
+
+## It's a bart party!
+.image bart-party.gif

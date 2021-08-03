@@ -1,0 +1,13 @@
+{{- define "deploy" }}
+{{- if .Deploy }}
+deploy:
+  {{- range $deployID, $deployMeta := .Deploy }}
+    {{- if $deployMeta.IsEmpty }}
+  {{ $deployID }}: {}
+    {{- else if $deployMeta }}
+  {{ $deployID }}:{{ include "deployMeta" $deployMeta | nindent 4 }}
+  {{- end }}
+    {{- end }}
+{{- else }}
+{{- end }}
+{{- end }}

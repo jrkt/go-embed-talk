@@ -1,0 +1,26 @@
+var WAML = `{{ $wapp := . -}}
+schema: {{ .Schema | quote }}
+name: {{ .Name }}
+slug: {{ .Slug }}
+owner: {{ .Owner }}
+{{- include "registry" $wapp }}
+{{- include "slack" $wapp }}
+{{- include "namespace" $wapp }}
+{{- include "template" $wapp }}
+{{- include "defaults" $wapp }}
+{{- include "deploy" $wapp }}
+`
+
+var Deploy = `{{- define "deploy" }}
+{{- if .Deploy }}
+deploy:
+  {{- range $deployID, $deployMeta := .Deploy }}
+    {{- if $deployMeta.IsEmpty }}
+  {{ $deployID }}: {}
+    {{- else if $deployMeta }}
+  {{ $deployID }}:{{ include "deployMeta" $deployMeta | nindent 4 }}
+  {{- end }}
+    {{- end }}
+{{- else }}
+{{- end }}
+{{- end }}`

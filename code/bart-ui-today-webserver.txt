@@ -1,0 +1,2 @@
+uiRouter := mux.NewRouter()
+uiRouter.PathPrefix("/").Handler(ui.StaticFilesHandler)

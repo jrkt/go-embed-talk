@@ -1,0 +1,4 @@
+.
+embed_fs.go
+└── templates
+    └── hello.txt // HL

@@ -1,0 +1,6 @@
+ └── http-server-with-image.go
+ └── templates
+     └── http-with-image-index.html
+     └── assets
+         └── images
+             └── gopher-1.png

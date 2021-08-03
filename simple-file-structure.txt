@@ -1,4 +1,0 @@
-.
-test.go
-└── templates
-    └── hello.txt // HL

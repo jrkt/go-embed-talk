@@ -1,0 +1,6 @@
+ └── ui
+     └── build # contents from 'npm run build'
+     └── package.json
+     └── ... # all the React code
+ └── webserver
+     └── webserver.go ⬇️ // HL

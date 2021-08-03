@@ -1,6 +1,0 @@
- └── server.go
- └── templates
-     └── index.html
-     └── assets
-         └── images
-             └── gopher-1.png

@@ -1,0 +1,87 @@
+var Monitoring = `{{- define "deployMeta.monitoring" }}
+{{- if .Monitoring }}
+monitoring:
+  {{- if stringSliceIsNil .Monitoring.AlertMethods }}
+  {{- else if eq (len .Monitoring.AlertMethods) 0 }}
+  alertMethods: []
+  {{ else }}
+  alertMethods:
+  {{- range .Monitoring.AlertMethods }}
+  - {{ . }}
+  {{- end }}
+  {{- end }}
+  {{- with .Monitoring.Rules }}
+  rules:
+  {{- range . }}
+  {{- if .Alert | and (not .Record) }}
+  - alert: {{ .Alert }}
+  {{- if .Record | and (not .Alert) }}
+  - record: {{ .Record }}
+  {{- end }}
+    expr: | {{- .Expr | nindent 6 }}
+  {{- if .For }}
+    for: {{ .For }}
+  {{- end }}
+  {{- if stringSliceIsNil .AlertMethods }}
+  {{- else if eq (len .AlertMethods) 0 }}
+    alertMethods: []
+  {{- else }}
+    alertMethods:
+    {{- range .AlertMethods }}
+    - {{ . }}
+    {{- end }}
+  {{- end }}
+  {{- if .Annotations }}
+    annotations:{{ .Annotations | toYaml | nindent 6 }}
+  {{- end }}
+  {{- if .Labels }}
+    labels:{{ .Labels | toYaml | nindent 6 }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- with .Monitoring.DB }}
+  db:{{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .Monitoring.NSQ }}
+  nsq:
+  {{- range . }}
+    {{- if .Topic | and .Channel }}
+  - topic: {{ .Topic }}
+    channel: {{ .Channel }}
+    {{- else if .Topic }}
+  - topic: {{ .Topic }}
+    {{- else }}
+  - channel: {{ .Channel }}
+    {{- end }}
+    {{- with .Alerts }}
+    alerts:
+    {{- range . }}
+    {{- if .MaxTopicDepth }}
+    - maxTopicDepth: {{ .MaxTopicDepth }}
+      {{- with .MaxChannelDepth }}
+      maxChannelDepth: {{ . }}
+      {{- end }}
+      {{- with .MinConsumers }}
+      minConsumers: {{ . }}
+      {{- end }}
+    {{- else if .MaxChannelDepth }}
+    - maxChannelDepth: {{ .MaxChannelDepth }}
+      {{- with .MinConsumers }}
+      minConsumers: {{ . }}
+      {{- end }}
+    {{- else if .MinConsumers }}
+    - minConsumers: {{ .MinConsumers }}
+    {{- end }}
+      {{- if .Severity }}
+      severity: {{ .Severity }}
+      {{- end }}
+      {{- if .AlertAfter }}
+      alertAfter: {{ .AlertAfter }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}`

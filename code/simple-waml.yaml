@@ -1,0 +1,8 @@
+schema: "2"
+name: The Deployer
+slug: the-deployer
+owner: acl-dev-team-devx@getweave.com
+slack: "#squad-devx"
+namespace: devx
+deploy:
+  ...

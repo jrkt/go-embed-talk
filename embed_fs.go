@@ -1,4 +1,4 @@
-// test.go
+// embed_fs.go
 package main
 
 import (

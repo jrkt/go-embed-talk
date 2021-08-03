@@ -1,6 +1,0 @@
- └── ui
-     └── build # contents from 'npm run build'
-     └── package.json
-     └── embed.go // HL
- └── webserver
-     └── webserver.go

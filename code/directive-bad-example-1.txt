@@ -1,0 +1,5 @@
+//go:embed index.html
+
+type CompanyType string
+
+var indexPage []byte

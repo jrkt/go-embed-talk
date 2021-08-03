@@ -1,0 +1,3 @@
+//go:embed index.html
+// this line is ok
+var indexPage []byte

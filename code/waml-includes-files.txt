@@ -1,0 +1,24 @@
+// IncludesFS is a single-layer deep list of files with module template components
+//go:embed includes/*.yaml.tmpl
+var IncludesFS embed.FS
+
+func Includes() map[string]string {
+    entries, err := IncludesFS.ReadDir("includes")
+    if err != nil {
+        panic(err)
+    }
+
+    ret := map[string]string{}
+    for _, entry := range entries {
+        name := "includes/" + entry.Name()
+
+        content, err := IncludesFS.ReadFile(name)
+        if err != nil {
+            panic(err)
+        }
+
+        ret[name] = string(content)
+    }
+
+    return ret
+}

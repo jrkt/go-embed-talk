@@ -1,0 +1,6 @@
+.
+react-webserver.go
+└── react-app
+    └── build # contents from 'npm run build'
+    └── package.json
+    └── ...
